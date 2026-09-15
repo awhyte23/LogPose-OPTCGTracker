@@ -505,6 +505,8 @@
     <button class="btn btn-ghost btn-block" id="refreshSheetBtn" style="margin-top:8px;">Refresh prices for EVERY card in the Sheet</button>
     <button class="btn btn-ghost btn-block" id="cleanupDupesBtn" style="margin-top:8px;">Merge legacy duplicates into EN entries</button>
     <div style="font-size:11px; color:var(--paper-faint); margin-top:6px; line-height:1.4;">One-time cleanup: finds cards added before language tracking existed that ended up duplicated alongside a newer English entry, merges their quantities together, and removes the old duplicate. Won't touch anything that's actually Japanese, or legacy cards with no EN counterpart to merge into.</div>
+    <button class="btn btn-danger btn-block" id="rebuildSheetBtn" style="margin-top:14px;">Clear &amp; rebuild sheet from current data</button>
+    <div style="font-size:11px; color:var(--paper-faint); margin-top:6px; line-height:1.4;">Reads every card currently in the sheet, wipes the rows, then re-adds each one fresh with a clean key and current price. Fixes accumulated corruption without re-scanning anything. Resets Highest/Lowest Price Seen to today's price for every card \u2014 you lose that history.</div>
     <div style="font-size:11px; color:var(--paper-faint); margin-top:6px; line-height:1.4;">Unlike "Refresh prices" on the Collection tab, this works directly on the Sheet itself \u2014 it covers every card ever added, from any device, not just what's loaded on this one. It can take a minute or two for large collections; keep this tab open until it finishes.</div>
     <div id="settingsStatus" style="font-size:12px; color:var(--paper-faint); text-align:center; margin-top:10px;"></div>
   </div>
@@ -1532,6 +1534,29 @@
         }
       }catch(e){
         status.textContent = `Couldn't complete: ${e.message}`;
+      }
+      btn.disabled = false;
+    });
+    $("#rebuildSheetBtn").addEventListener('click', async ()=>{
+      if(!state.webhookUrl){ toast("Add a Web App URL first"); return; }
+      const sure = confirm("This wipes every row in your Sheet and re-adds each card fresh. Highest/Lowest Price Seen will reset to today's price for everything. This cannot be undone from the app — continue?");
+      if(!sure) return;
+      const status = $("#settingsStatus");
+      const btn = $("#rebuildSheetBtn");
+      btn.disabled = true;
+      status.innerHTML = '<span class="spinner"></span> Rebuilding sheet — this can take a few minutes for a large collection…';
+      try{
+        const sep = state.webhookUrl.includes('?') ? '&' : '?';
+        const r = await fetch(`${state.webhookUrl}${sep}action=rebuildSheet`);
+        const result = await r.json().catch(()=>null);
+        if(result && result.ok){
+          status.textContent = `Rebuilt ${result.added} of ${result.totalFound} cards.` +
+            (result.failed ? ` ${result.failed} couldn't be found: ${result.failedCodes.join(', ')}` : '');
+        } else {
+          status.textContent = `Something went wrong: ${(result && result.error) || 'no response'}`;
+        }
+      }catch(e){
+        status.textContent = `Couldn't complete: ${e.message}. It may still be running on Google's side — check your Sheet directly in a minute.`;
       }
       btn.disabled = false;
     });
